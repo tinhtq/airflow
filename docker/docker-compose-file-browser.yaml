@@ -1,8 +1,0 @@
-services:
-  filebrowser:
-    image: filebrowser/filebrowser
-    container_name: filebrowser
-    ports:
-      - "8081:80"
-    volumes:
-      - ./dags:/srv
