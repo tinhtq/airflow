@@ -4,4 +4,4 @@
 .astro
 .venv
 include/data
-.gitignore
+*__pycache__*

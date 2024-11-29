@@ -2,6 +2,7 @@ import requests
 from airflow.decorators import sensor, dag, task
 from airflow.hooks.base import BaseHook
 from datetime import datetime
+from astro.sql.table import Table, Metadata
 from airflow.operators.python import PythonOperator
 from airflow.sensors.base import PokeReturnValue
 from airflow.providers.docker.operators.docker import DockerOperator
@@ -64,7 +65,14 @@ def stock_market():
         python_callable=_get_formatted_csv,
         op_kwargs={"path": '{{ task_instance.xcom_pull(task_ids="format_prices") }}'},
     )
-    is_api_available() >> get_stock_prices >> store_prices >> format_prices
+    (
+        is_api_available()
+        >> get_stock_prices
+        >> store_prices
+        >> format_prices
+        >> get_formatted_csv
+    )
+    Table()
 
 
 stock_market()
