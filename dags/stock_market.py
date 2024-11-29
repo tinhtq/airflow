@@ -2,10 +2,15 @@ import requests
 from airflow.decorators import sensor, dag, task
 from airflow.hooks.base import BaseHook
 from datetime import datetime
+from astro.sql.table import Table, Metadata
 from airflow.operators.python import PythonOperator
 from airflow.sensors.base import PokeReturnValue
-
-from include.stock_market.tasks import _get_stock_prices, _store_prices
+from airflow.providers.docker.operators.docker import DockerOperator
+from include.stock_market.tasks import (
+    _get_stock_prices,
+    _store_prices,
+    _get_formatted_csv,
+)
 
 SYMBOL = "AAPL"
 
@@ -37,11 +42,37 @@ def stock_market():
         task_id="store_prices",
         python_callable=_store_prices,
         op_kwargs={
-            "stock": '{{ task_instance.xcom_pull(task_ids="get_stock_prices") }}'
+            "prices": '{{ task_instance.xcom_pull(task_ids="get_stock_prices") }}'
         },
     )
-
-    is_api_available() >> get_stock_prices >> store_prices
+    format_prices = DockerOperator(
+        task_id="format_prices",
+        image="airflow/spark-app",
+        container_name="format_prices",
+        api_version="auto",
+        auto_remove=True,
+        docker_url="tcp://docker-proxy:2375",
+        tty=True,
+        xcom_all=False,
+        mount_tmp_dir=False,
+        network_mode="container:spark-master",
+        environment={
+            "SPARK_APPLICATION_ARGS": '{{ task_instance.xcom_pull(task_ids="store_prices") }}'
+        },
+    )
+    get_formatted_csv = PythonOperator(
+        task_id="get_formatted_csv",
+        python_callable=_get_formatted_csv,
+        op_kwargs={"path": '{{ task_instance.xcom_pull(task_ids="format_prices") }}'},
+    )
+    (
+        is_api_available()
+        >> get_stock_prices
+        >> store_prices
+        >> format_prices
+        >> get_formatted_csv
+    )
+    Table()
 
 
 stock_market()
