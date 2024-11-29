@@ -1,8 +1,11 @@
 import json
 from io import BytesIO
 from minio import Minio
+from airflow.exceptions import AirflowNotFoundException
 import requests
 from airflow.hooks.base import BaseHook
+
+bucket_name = "stock-market"
 
 
 def _get_minio_client():
@@ -28,7 +31,6 @@ def _store_prices(prices):
     client = _get_minio_client()
 
     prices = json.loads(prices)
-    bucket_name = "stock-market"
     if not client.bucket_exists(bucket_name):
         client.make_bucket(bucket_name)
     symbol = prices["meta"]["symbol"]
@@ -43,4 +45,11 @@ def _store_prices(prices):
 
 
 def _get_formatted_csv(path):
-    return 0
+    path = "abc/AAPL"
+    client = _get_minio_client()
+    prefix_name = f"{path.split('/')[1]}/formatted_prices/"
+    objects = client.list_objects(bucket_name, prefix=prefix_name, recursive=True)
+    for obj in objects:
+        if obj.object_name.endswith(".csv"):
+            return obj.object_name
+    raise AirflowNotFoundException("CSV File doesn't exsit")
